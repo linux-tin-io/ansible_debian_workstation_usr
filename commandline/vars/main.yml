@@ -1,0 +1,23 @@
+---
+oh_my_zsh_repo: "https://github.com/ohmyzsh/ohmyzsh.git"
+oh_my_zsh_version: "master"
+zsh_theme: "gnzh"
+zsh_plugins:
+  - git
+tmux_plugins:
+  - 'tmux-plugins/tpm'
+  - 'tmux-plugins/tmux-sensible'
+  - 'dracula/tmux'
+  - 'tmux-plugins/tmux-yank'
+dracula_plugins: "cpu-usage ram-usage time" # Explicitly enable these
+dracula_show_powerline: true
+dracula_show_flags: true
+dracula_show_battery: false
+dracula_show_cpu_usage: true # These individual show_* variables might be redundant now
+dracula_show_ram_usage: true # but keeping them won't hurt
+dracula_show_network: false
+dracula_show_weather: false
+dracula_show_time: true
+yank_action: 'copy-pipe-and-discard "wl-copy -n"'
+yank_selection: 'clipboard'
+tmux_default_prefix: C-b

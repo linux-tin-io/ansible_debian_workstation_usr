@@ -1,0 +1,362 @@
+---
+#################
+# ZSH CONFIG    #
+#################
+
+- name: Get the username for UID 1000
+  command: id -nu 1000
+  register: uid_1000_username
+  changed_when: false
+
+- name: Set target username fact
+  set_fact:
+    target_username: "{{ uid_1000_username.stdout | trim }}"
+
+- name: Ensure Zsh is installed
+  apt:
+    name: zsh
+    state: present
+
+- name: Check if Oh My Zsh is already installed
+  stat:
+    path: "/home/{{ target_username }}/.oh-my-zsh"
+  register: oh_my_zsh_check
+
+- name: Install Oh My Zsh
+  git:
+    repo: "{{ oh_my_zsh_repo }}"
+    dest: "/home/{{ target_username }}/.oh-my-zsh"
+    version: "{{ oh_my_zsh_version }}"
+  become_user: "{{ target_username }}"
+  when: not oh_my_zsh_check.stat.exists
+
+- name: Create .zshrc with desired configuration
+  copy:
+    content: |
+      # Path to your Oh My Zsh installation.
+      export ZSH="$HOME/.oh-my-zsh"
+
+      # Set name of the theme to load
+      ZSH_THEME="{{ zsh_theme }}"
+
+      # Which plugins would you like to load?
+      plugins=({{ zsh_plugins | join(' ') }})
+
+      source $ZSH/oh-my-zsh.sh
+
+      # Add any other custom configurations below this line
+    dest: "/home/{{ target_username }}/.zshrc"
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+    mode: "0644"
+
+- name: Set Zsh as the default shell for the user with UID 1000
+  user:
+    name: "{{ target_username }}"
+    shell: /bin/zsh
+
+#################
+# TMUX CONFIG   #
+#################
+- name: Ensure Tmux is installed
+  become: true
+  apt:
+    name: tmux
+    state: present
+
+- name: Ensure .tmux directory exists
+  become: true
+  file:
+    path: "/home/{{ target_username }}/.tmux"
+    state: directory
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+    mode: "0755"
+
+- name: Check if TPM is already installed
+  become: true
+  stat:
+    path: "/home/{{ target_username }}/.tmux/plugins/tpm"
+  register: tpm_check
+
+- name: Install Tmux Plugin Manager (TPM)
+  git:
+    repo: "https://github.com/tmux-plugins/tpm"
+    dest: "/home/{{ target_username }}/.tmux/plugins/tpm"
+  become_user: "{{ target_username }}"
+  when: not tpm_check.stat.exists
+
+- name: Create tmux.conf with updated configuration
+  become: true
+  copy:
+    content: |
+      # Check for the existence of the ~/.tmux.tag file and display the message
+      if-shell 'test -f ~/.tmux.tag' 'display-message "👋 Welcome to tmux! Please press Ctrl+b I to install/reload plugins."' ''
+
+      # If the tag file existed, remove it using tmux run-shell
+      if-shell 'test -f ~/.tmux.tag' 'run-shell "rm ~/.tmux.tag"' ''
+      # List of plugins
+      set -g @plugin 'tmux-plugins/tpm'
+      set -g @plugin 'tmux-plugins/tmux-sensible'
+      set -g @plugin 'dracula/tmux'
+      set -g @plugin 'tmux-plugins/tmux-yank'
+
+      set -g @dracula-plugins "{{ dracula_plugins }}"
+      set -g @dracula-show-powerline "{{ dracula_show_powerline | lower }}"
+      set -g @dracula-show-flags "{{ dracula_show_flags | lower }}"
+      set -g @dracula-show-battery "{{ dracula_show_battery | lower }}"
+      set -g @dracula-show-cpu-usage "{{ dracula_show_cpu_usage | lower }}"
+      set -g @dracula-show-ram-usage "{{ dracula_show_ram_usage | lower }}"
+      set -g @dracula-show-network "{{ dracula_show_network | lower }}"
+      set -g @dracula-show-weather "{{ dracula_show_weather | lower }}"
+      set -g @dracula-show-time "{{ dracula_show_time | lower }}"
+
+      set -g @yank_action '{{ yank_action }}'
+      set -g @yank_selection '{{ yank_selection }}'
+
+      set -g mode-keys vi
+      set -g status-keys vi
+      setw -g mode-keys vi
+      set -g detach-on-destroy off
+      # Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+      run '~/.tmux/plugins/tpm/tpm'
+    dest: "/home/{{ target_username }}/.tmux.conf"
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+    mode: "0644"
+
+- name: Check if tmux is running
+  become_user: "{{ target_username }}"
+  command: tmux info
+  register: tmux_running
+  ignore_errors: true
+  changed_when: false
+
+- name: Start a detached tmux session if not running
+  become_user: "{{ target_username }}"
+  command: tmux new-session -d -s ansible_plugin_update
+  when: tmux_running.rc != 0
+  register: session_start_result
+  changed_when: session_start_result.rc == 0
+
+- name: Update all TPM plugins
+  become_user: "{{ target_username }}"
+  command: tmux source-file ~/.tmux.conf \; run-shell '~/.tmux/plugins/tpm/bin/update_plugins all'
+  when: tmux_running.rc == 0 or session_start_result.changed
+  register: plugin_update_result
+  failed_when: plugin_update_result.rc != 0
+
+- name: Kill the temporary tmux session (optional, cleanup if we started it)
+  become_user: "{{ target_username }}"
+  command: tmux kill-session -t ansible_plugin_update
+  when: session_start_result.changed
+  ignore_errors: true
+
+- name: Insert welcome message block
+  become_user: "{{ target_username }}"
+  blockinfile:
+    path: ~/.tmux.conf
+    marker: "# {mark} TPM Welcome Message"
+    block: |
+      # Check if TPM has run before (by looking for a TPM-specific directory)
+      if-shell 'ls ~/.tmux/plugins/tpm > /dev/null 2>&1' '' 'display-message "👋 Welcome to tmux! Please press Ctrl+b I to install/reload plugins."'
+    insertbefore: "# List of plugins"
+    create: true
+
+- name: Ensure TPM initialization is at the end of ~/.tmux.conf
+  become_user: "{{ target_username }}"
+  blockinfile:
+    path: ~/.tmux.conf
+    marker: "# {mark} TPM Initialization"
+    block: |
+      # Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+      run '~/.tmux/plugins/tpm/tpm'
+    insertafter: "# ... other plugins ..."
+    create: true
+
+- name: Create ~/.tmux.tag file (will trigger welcome message on next tmux start)
+  file:
+    path: "/home/{{ target_username }}/.tmux.tag"
+    state: touch
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+
+
+#################
+# NEOVIM CONFIG #
+#################
+- name: Ensure Neovim is installed
+  become: true
+  apt:
+    name: neovim
+    state: present
+
+- name: Create Neovim configuration directory
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ target_username }}/.config/nvim"
+    state: directory
+    mode: "0755"
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+
+- name: Create Neovim autoload directory
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ target_username }}/.config/nvim/autoload"
+    state: directory
+    mode: "0755"
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+
+- name: Create Neovim plugged directory
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ target_username }}/.config/nvim/plugged"
+    state: directory
+    mode: "0755"
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+
+- name: Check if plug.vim exists
+  become: true
+  ansible.builtin.stat:
+    path: "/home/{{ target_username }}/.config/nvim/autoload/plug.vim"
+  register: plug_vim_exists
+
+- name: Install vim-plug using wget (fallback if get_url fails or curl isn't desired)
+  ansible.builtin.command:
+    cmd: wget -O /home/{{ target_username }}/.config/nvim/autoload/plug.vim https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  become_user: "{{ target_username }}"
+  when: plug_vim_exists
+
+- name: Create basic Neovim initialization file (init.vim) with clipboard support
+  become: true
+  ansible.builtin.copy:
+    dest: "/home/{{ target_username }}/.config/nvim/init.vim"
+    content: |
+      " Ensure plug.vim is sourced
+      source ~/.config/nvim/autoload/plug.vim
+
+      " Initialize vim-plug
+      call plug#begin('~/.config/nvim/plugged')
+
+      " Add plugins here (example: a colorscheme)
+      " Plug 'morhetz/gruvbox'
+
+      " All plugins must be added before the call to plug#end()
+      call plug#end()
+
+      " Add plugin directory to runtimepath
+      set runtimepath^=~/.local/share/nvim/plugged
+
+      " Enable line numbers
+      set number
+
+      " Set the tab width to 4 spaces
+      set softtabstop=4
+      set shiftwidth=4
+      set expandtab " Convert tabs to spaces
+
+      " Enable syntax highlighting
+      syntax on
+
+      " Set the encoding to UTF-8
+      set encoding=utf-8
+      set fileencoding=utf-8
+
+      " Enable mouse support in all modes
+      set mouse=a
+
+      " Highlight the current line
+      set cursorline
+      highlight CursorLine cterm=underline ctermbg=NONE gui=underline guibg=NONE
+
+      " Show the command you're typing
+      set showcmd
+
+      " Don't create backup files
+      set nobackup
+      set nowritebackup
+      set noswapfile
+
+      " Enable persistent undo
+      set undofile
+
+      " Set the timeout for key mappings (in milliseconds)
+      set timeoutlen=500
+      set updatetime=100
+
+      " Clipboard to external
+      set clipboard=unnamedplus
+
+      " Some basic key mappings (leader key is backslash by default)
+      nnoremap <leader>w :write<CR>
+      nnoremap <leader>q :bdelete<CR>
+
+      " Enable true color support if your terminal supports it
+      if has('termguicolors')
+        set termguicolors
+      endif
+
+      " Auto install plugins on first startup
+      autocmd VimEnter * PlugInstall
+    owner: "{{ target_username }}"
+    mode: "0644"
+
+- name: Check if 'Plug' is defined in init.vim (for explicit install)
+  become: true
+  ansible.builtin.slurp:
+    path: "/home/{{ target_username }}/.config/nvim/init.vim"
+  register: init_vim_content_explicit_install
+
+- name: Run vim-plug install (with full nvim path)
+  ansible.builtin.command:
+    cmd: "/usr/bin/nvim -headless -c 'PlugInstall | qall'"
+  become_user: "{{ target_username }}"
+  when: "'Plug' in init_vim_content_explicit_install.content | b64decode"
+
+- name: Create basic Neovim mappings file (mappings.vim)
+  become: true
+  ansible.builtin.copy:
+    dest: "/home/{{ target_username }}/.config/nvim/mappings.vim"
+    content: |
+      " Custom key mappings here
+      nnoremap <leader>e :NvimTreeToggle<CR> " Example: Toggle file explorer (requires a plugin)
+    owner: "{{ target_username }}"
+    mode: "0644"
+
+- name: Update init.vim to source mappings.vim
+  become: true
+  ansible.builtin.lineinfile:
+    path: "/home/{{ target_username }}/.config/nvim/init.vim"
+    line: "source ~/.config/nvim/mappings.vim"
+    insertafter: "call plug#end()"
+
+#############
+# MC CONFIG #
+#############
+- name: Ensure mc is installed
+  become: true
+  apt:
+    name: mc
+    state: present
+
+- name: Ensure .mc directory exists
+  become: true
+  ansible.builtin.file:
+    path: "/home/{{ target_username }}/.mc"
+    state: directory
+    mode: "0755"
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+
+- name: Set MC color scheme to julia256
+  become: true
+  ansible.builtin.ini_file:
+    path: "/home/{{ target_username }}/.mc/ini"
+    section: colors
+    option: base_color
+    value: "normal=lightgray,black:selected=white,blue:marked=yellow,black:markselect=yellow,blue:errors=red,gray:reverse=black,lightgray:gauge=cyan,black"
+    create: true
+  become_user: "{{ target_username }}"

@@ -1,0 +1,282 @@
+---
+- name: Ensure necessary packages are installed
+  become: true
+  apt:
+    name:
+      - gnome-shell-extensions
+      - gir1.2-gtop-2.0  # Required for some extensions
+      - unzip
+      - wget
+      - jq
+      - python3-jmespath
+    state: present
+
+- name: Get the username for UID 1000
+  become: true
+  command: id -nu 1000
+  register: uid_1000_username
+  changed_when: false
+
+- name: Set target username fact
+  set_fact:
+    target_username: "{{ uid_1000_username.stdout | trim }}"
+
+- name: Enable showing seconds in the clock
+  become_user: "{{ target_username }}"
+  command: "gsettings set org.gnome.desktop.interface clock-show-seconds true"
+
+- name: Set current-workspace-only to false
+  become_user: "{{ target_username }}"
+  command: "gsettings set org.gnome.shell.window-switcher current-workspace-only false"
+  register: gsettings_output
+  changed_when: "gsettings_output.rc != 0" # Consider more robust change detection
+
+- name: Display output (optional)
+  debug:
+    var: gsettings_output
+
+- name: Check current setting (optional verification)
+  become_user: "{{ target_username }}"
+  command: "gsettings get org.gnome.shell.window-switcher current-workspace-only"
+  register: current_setting
+  changed_when: false
+  when: gsettings_output.changed
+
+- name: Display current setting (optional verification)
+  debug:
+    var: current_setting
+  when: gsettings_output.changed
+
+- name: Set favorite apps
+  become_user: "{{ target_username }}"
+  command: >-
+    gsettings set org.gnome.shell favorite-apps
+    "['{{ desktop_id_01 }}', '{{ desktop_id_02 }}', '{{ desktop_id_03 }}', '{{ desktop_id_04 }}', '{{ desktop_id_05 }}', '{{ desktop_id_06 }}', '{{ desktop_id_07 }}', '{{ desktop_id_08 }}', '{{ desktop_id_09 }}', '{{ desktop_id_10 }}', '{{ desktop_id_11 }}']"
+
+- name: Ensure GNOME Shell extensions directory exists
+  become_user: "{{ target_username }}"
+  file:
+    path: ~/.local/share/gnome-shell/extensions
+    state: directory
+    owner: "{{ target_username }}"
+    group: "{{ target_username }}"
+    mode: '0755'
+
+- name: Ensure GNOME Shell extensions directory exists
+  become_user: "{{ target_username }}"
+  file:
+    path: ~/.local/share/gnome-shell/extensions
+    state: directory
+    mode: '0755'
+
+- name: Ensure Caffeine extension directory exists
+  become_user: "{{ target_username }}"
+  file:
+    path: ~/.local/share/gnome-shell/extensions/caffeine@patapon.info
+    state: directory
+    mode: '0755'
+
+- name: Download Caffeine extension ZIP file
+  become_user: "{{ target_username }}"
+  become: false
+  command: "wget -O /tmp/caffeine.zip {{ caffeine_zip_url }}"
+
+- name: Extract Caffeine extension ZIP
+  become_user: "{{ target_username }}"
+  command: "unzip -o /tmp/caffeine.zip -d ~/.local/share/gnome-shell/extensions/caffeine@patapon.info"
+
+- name: Remove downloaded ZIP file
+  become: false
+  file:
+    path: /tmp/caffeine.zip
+    state: absent
+
+- name: Ensure GNOME Shell extensions directory exists
+  file:
+    path: ~/.local/share/gnome-shell/extensions
+    state: directory
+    mode: '0755'
+
+- name: Ensure Dash-to-Dock extension directory exists
+  become_user: "{{ target_username }}"
+  file:
+    path: "~/.local/share/gnome-shell/extensions/{{ dash_to_dock_uuid }}"
+    state: directory
+    mode: '0755'
+
+- name: Download Dash-to-Dock extension ZIP file
+  become_user: "{{ target_username }}"
+  become: false
+  command: "wget -O /tmp/dash-to-dock.zip {{ dash_to_dock_zip_url }}"
+
+- name: Extract Dash-to-Dock extension ZIP
+  become_user: "{{ target_username }}"
+  command: "unzip -o /tmp/dash-to-dock.zip -d ~/.local/share/gnome-shell/extensions/{{ dash_to_dock_uuid }}"
+
+- name: Remove downloaded ZIP file
+  become_user: "{{ target_username }}"
+  become: false
+  file:
+    path: /tmp/dash-to-dock.zip
+    state: absent
+
+- name: Compile GNOME Shell schemas for Caffeine
+  become_user: "{{ target_username }}"
+  command: "glib-compile-schemas ~/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
+  ignore_errors: true # In case there are no schemas to compile
+
+- name: Reboot the system
+  become: true
+  reboot:
+    reboot_timeout: 300
+
+- name: Enable Dash-to-Dock extension
+  become_user: "{{ target_username }}"
+  command: "gnome-extensions enable dash-to-dock@micxgx.gmail.com"
+  ignore_errors: true
+
+- name: Enable Caffeine extension
+  become_user: "{{ target_username }}"
+  command: "gnome-extensions enable caffeine@patapon.info"
+  ignore_errors: true
+
+- name: Set Caps Lock as Compose Key
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/input-sources/xkb-options "['compose:caps']"
+
+- name: Add minimize, maximize and close buttons to titlebar
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/preferences/button-layout "'menu:minimize,maximize,close'"
+
+- name: Set GNOME to use dark mode
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/interface/color-scheme "'prefer-dark'"
+
+- name: Set the number of fixed virtual desktops
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/preferences/num-workspaces 4
+
+- name: Disable dynamic workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/mutter/dynamic-workspaces false
+
+- name: Set keyboard shortcuts for switching workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/switch-to-workspace-left "['<Control>Left']"
+
+- name: Set keyboard shortcuts for switching workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/switch-to-workspace-right "['<Control>Right']"
+
+- name: Set keyboard shortcuts for Moving active window to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/move-to-workspace-1 "['<Super>1']"
+
+- name: Set keyboard shortcuts for Moving active window to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/move-to-workspace-2 "['<Super>2']"
+
+- name: Set keyboard shortcuts for Moving active window to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/move-to-workspace-3 "['<Super>3']"
+
+- name: Set keyboard shortcuts for Moving active window to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/move-to-workspace-4 "['<Super>4']"
+
+- name: Set keyboard shortcuts for switching to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/switch-to-workspace-1 "['<Alt>1']"
+
+- name: Set keyboard shortcuts for switching to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/switch-to-workspace-2 "['<Alt>2']"
+
+- name: Set keyboard shortcuts for switching to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/switch-to-workspace-3 "['<Alt>3']"
+
+- name: Set keyboard shortcuts for switching to specific workspaces
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/keybindings/switch-to-workspace-4 "['<Alt>4']"
+
+- name: Install necessary packages
+  become: true
+  apt:
+    name:
+      - wget
+      - unzip
+      - fontconfig
+    state: present
+
+- name: Install python3-psutil for dconf module
+  apt:
+    name: python3-psutil
+    state: present
+
+- name: Download Inter font archive using wget
+  become: true
+  command: "wget -O {{ inter_font_archive }} {{ inter_font_url }}"
+  args:
+    creates: "{{ inter_font_archive }}" # Make it idempotent
+  register: wget_result
+  failed_when: wget_result.rc > 0
+
+- name: Verify downloaded file (optional, but recommended)
+  become: true
+  command: "sha256sum {{ inter_font_archive }}"
+  register: sha256_output
+  changed_when: false
+
+- name: Create Inter font directory
+  become: true
+  file:
+    path: "{{ inter_font_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Unzip Inter fonts
+  unarchive:
+    src: "{{ inter_font_archive }}"
+    dest: "{{ inter_font_directory }}"
+    remote_src: true # Tell unarchive that the source is on the remote machine
+    owner: root
+    group: root
+    mode: "0644"
+    creates: "{{ inter_font_directory }}/Inter-Regular.ttf" # Check for a key file
+
+- name: Update font cache
+  become: true
+  command: "{{ fontconfig_cache_command }}"
+  become_user: root # Ensure font cache is updated system-wide
+
+- name: Set Inter as default Gnome font
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/interface/font-name "'Inter Regular 10'" 
+
+- name: Set Inter as default Gnome document font
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/interface/document-font-name "'Inter Regular 10'" 
+
+- name: Set Inter as default Gnome document Titlebar font
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/wm/preferences/titlebar-font "'Inter Bold 11'" 
+
+- name: Set Inter as default Gnome monospace font
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/interface/monospace-font-name "'Inter Mono Regular 10'" 
+
+- name: Set clock to 24hr
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/interface/clock-format "'24h'" 
+
+- name: Set location to automatic
+  become_user: "{{ target_username }}"
+  command: dconf write /org/gnome/desktop/datetime/automatic-timezone "true" 
+
+- name: Update dconf
+  become: true
+  command: dconf update
+

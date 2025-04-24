@@ -1,0 +1,5 @@
+---
+blackbox_font: "'NovaMono for Powerline 12'" # String values need quotes
+remember_window_size: "true"
+style_preference: "uint32 2"
+theme_dark: "'Dracula'"

@@ -1,0 +1,41 @@
+---
+- name: Get the username for UID 1000
+  become: true
+  command: id -nu 1000
+  register: uid_1000_username
+  changed_when: false
+
+- name: Set target username fact
+  set_fact:
+    target_username: "{{ uid_1000_username.stdout | trim }}"
+
+- name: Check if BlackBox package is installed
+  become: true
+  ansible.builtin.package:
+    name: blackbox
+    state: present
+  register: blackbox_installed
+
+- name: Debug - BlackBox installation status
+  ansible.builtin.debug:
+    msg: "BlackBox is installed: {{ blackbox_installed.changed | ternary('Yes', 'No') }}"
+
+- name: Set BlackBox remember-window-size via dconf command
+  ansible.builtin.command:
+    cmd: dconf write /com/raggesilver/BlackBox/remember-window-size "{{ remember_window_size }}"
+  become_user: "{{ target_username }}"
+
+- name: Set BlackBox font via dconf command
+  ansible.builtin.command:
+    cmd: dconf write /com/raggesilver/BlackBox/font "{{ blackbox_font }}"
+  become_user: "{{ target_username }}"
+
+- name: Set BlackBox style-preference via dconf command
+  ansible.builtin.command:
+    cmd: dconf write /com/raggesilver/BlackBox/style-preference "{{ style_preference }}"
+  become_user: "{{ target_username }}"
+
+- name: Set BlackBox dark theme via dconf command
+  ansible.builtin.command:
+    cmd: dconf write /com/raggesilver/BlackBox/theme-dark "{{ theme_dark }}"
+  become_user: "{{ target_username }}"

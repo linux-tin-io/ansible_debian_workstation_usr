@@ -1,0 +1,8 @@
+---
+
+- hosts: workstations
+  roles:
+    - commandline
+    - gnome
+    - blackbox
+  gather_facts: true # Ensure facts are gathered
