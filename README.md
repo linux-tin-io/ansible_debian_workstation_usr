@@ -1,0 +1,42 @@
+ansible_debian_workstation_usr
+INFO: all configuration happens on user with id 1000 (first normal user)
+
+- commandline
+  - zsh configuration
+  - ohmyzsh install and config
+  - tmux configuration including tpm plugins
+  - tmux welcome message on first run
+  - tmux yank to clipboard function
+  - neovim configuration
+  - neovim yank to clipboard function
+  - midnight commander config
+  - midnight commander dark theme
+- gnome
+  - Show time with seconds
+  - Show time in 24h mode
+  - Disable dynamic workspaces
+  - Set 4 defined workspaces
+  - pin favorite apps to dock (see gnome/vars/main.yml)
+  - Install Shell Extension Caffeine
+  - Install Shell Extension Dash-to-Dock
+  - Configure and enable above Shell Extensions
+  - Set Caps-Lock as Compose Key
+  - Set Gnome into dark mode permanently
+  - Set keyboard shortcut for switching workspaces
+  	- Ctrl-Right to move to workspace to the right
+  	- Ctrl-Left to move to workspace to the left
+  	- Alt-1 to move to workspace 1
+  	- Alt-2 to move to workspace 2
+  	- Alt-3 to move to workspace 3
+  	- Alt-4 to move to workspace 4
+  	- Super-1 to move active window to workspace 1
+  	- Super-2 to move active window to workspace 2
+  	- Super-3 to move active window to workspace 3
+  	- Super-4 to move active window to workspace 4
+  - Download Font Family Inter
+  - Set Font Family Inter as standard font for Gnome
+- blackbox
+  - Set App to remember window size
+  - Set App to always use dark theme
+  - Set App to use dracula color theme
+  - Set Nova Mono Powerline as standard font
